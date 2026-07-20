@@ -412,10 +412,9 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
     }
 
     @CompilerDirectives.TruffleBoundary
-    public static Object transformImportObject(JSContext context, JSRealm realm, Object wasmModule, Object importObject) {
+    public static Object transformImportObject(JSContext context, JSRealm realm, Object wasmModule, Object importObject, Object compileOptions) {
         try {
             JSObject transformedImportObject = JSOrdinary.createWithNullPrototype(context);
-
             Object importsFn = realm.getWASMModuleImports();
             Object imports = InteropLibrary.getUncached(importsFn).execute(importsFn, wasmModule);
             InteropLibrary importsInterop = InteropLibrary.getUncached(imports);
@@ -427,78 +426,90 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
                 TruffleString module = asTString(descriptorInterop.readMember(descriptor, "module"));
                 Object moduleImportObject = JSRuntime.get(importObject, module);
                 InteropLibrary moduleImportObjectInterop = InteropLibrary.getUncached(moduleImportObject);
-                if (!moduleImportObjectInterop.hasMembers(moduleImportObject)) {
-                    throw Errors.createTypeError("Imported module \"" + module + "\" is not an object: " + JSRuntime.safeToString(moduleImportObject));
-                }
 
                 TruffleString name = asTString(descriptorInterop.readMember(descriptor, "name"));
-                Object value = JSRuntime.get(moduleImportObject, name);
                 TruffleString externType = asTString(descriptorInterop.readMember(descriptor, "kind"));
                 Object wasmValue;
 
-                if (Strings.equals(Strings.FUNCTION, externType)) {
-                    if (!JSRuntime.isCallable(value)) {
-                        throw createLinkErrorImport(i, module, name, "Imported value is not callable");
+                final boolean isJsString = Strings.equals(module, Strings.constant("js-string"));
+
+                if (!isJsString) {
+                    Object value = JSRuntime.get(moduleImportObject, name);
+                    if (!moduleImportObjectInterop.hasMembers(moduleImportObject)) {
+                        throw Errors.createTypeError("Imported module \"" + module + "\" is not an object: " + JSRuntime.safeToString(moduleImportObject));
                     }
-                    if (JSWebAssembly.isExportedFunction(value)) {
-                        wasmValue = JSWebAssembly.getExportedFunction((JSDynamicObject) value);
-                    } else {
-                        TruffleString typeInfo = asTString(descriptorInterop.readMember(descriptor, "type"));
-                        wasmValue = createHostFunction(value, parseWasmFunctionTypeInfo(context, typeInfo));
-                    }
-                } else if (Strings.equals(Strings.GLOBAL, externType)) {
-                    if (JSWebAssemblyGlobal.isJSWebAssemblyGlobal(value)) {
-                        wasmValue = ((JSWebAssemblyGlobalObject) value).getWASMGlobal();
-                    } else {
-                        TruffleString valueTypeStr = asTString(descriptorInterop.readMember(descriptor, "type"));
-                        WebAssemblyType valueType = WebAssemblyType.lookup(valueTypeStr.toJavaStringUncached());
-                        if (valueType == WebAssemblyType.i64) {
-                            if (!context.getLanguageOptions().wasmBigInt()) {
-                                throw createLinkErrorImport(i, module, name, "Can't import the value of i64 WebAssembly.Global");
-                            }
-                            if (!JSRuntime.isBigInt(value)) {
-                                throw createLinkErrorImport(i, module, name, "Value of valtype i64 must be BigInt");
-                            }
+                    if (Strings.equals(Strings.FUNCTION, externType)) {
+                        if (!JSRuntime.isCallable(value)) {
+                            throw createLinkErrorImport(i, module, name, "Imported value is not callable");
                         }
-                        if ((valueType == WebAssemblyType.i32 || valueType == WebAssemblyType.f32 || valueType == WebAssemblyType.f64) && !JSRuntime.isNumber(value)) {
-                            throw createLinkErrorImport(i, module, name, "Value of valtype i32, f32 and f64 must be Number");
-                        } else if (valueType == WebAssemblyType.v128) {
-                            throw createLinkErrorImport(i, module, name, "Values of valtype v128 cannot be imported from JS");
-                        } else if (valueType == WebAssemblyType.exnref) {
-                            throw createLinkErrorImport(i, module, name, "Values of valtype exnref cannot be imported from JS");
+                        if (JSWebAssembly.isExportedFunction(value)) {
+                            wasmValue = JSWebAssembly.getExportedFunction((JSDynamicObject) value);
+                        } else {
+                            TruffleString typeInfo = asTString(descriptorInterop.readMember(descriptor, "type"));
+                            wasmValue = createHostFunction(value, parseWasmFunctionTypeInfo(context, typeInfo));
                         }
-                        Object webAssemblyValue;
-                        try {
-                            webAssemblyValue = ToWebAssemblyValueNodeGen.getUncached().execute(value, valueType);
-                        } catch (JSException ex) {
-                            if (ex.getErrorType() == JSErrorType.TypeError) {
-                                throw Errors.createWasmLinkError(ex, null);
-                            } else {
-                                throw ex;
+                    } else if (Strings.equals(Strings.GLOBAL, externType)) {
+                        if (JSWebAssemblyGlobal.isJSWebAssemblyGlobal(value)) {
+                            wasmValue = ((JSWebAssemblyGlobalObject) value).getWASMGlobal();
+                        } else {
+                            TruffleString valueTypeStr = asTString(descriptorInterop.readMember(descriptor, "type"));
+                            WebAssemblyType valueType = WebAssemblyType.lookup(valueTypeStr.toJavaStringUncached());
+                            if (valueType == WebAssemblyType.i64) {
+                                if (!context.getLanguageOptions().wasmBigInt()) {
+                                    throw createLinkErrorImport(i, module, name, "Can't import the value of i64 WebAssembly.Global");
+                                }
+                                if (!JSRuntime.isBigInt(value)) {
+                                    throw createLinkErrorImport(i, module, name, "Value of valtype i64 must be BigInt");
+                                }
                             }
+                            if ((valueType == WebAssemblyType.i32 || valueType == WebAssemblyType.f32 || valueType == WebAssemblyType.f64) && !JSRuntime.isNumber(value)) {
+                                throw createLinkErrorImport(i, module, name, "Value of valtype i32, f32 and f64 must be Number");
+                            } else if (valueType == WebAssemblyType.v128) {
+                                throw createLinkErrorImport(i, module, name, "Values of valtype v128 cannot be imported from JS");
+                            } else if (valueType == WebAssemblyType.exnref) {
+                                throw createLinkErrorImport(i, module, name, "Values of valtype exnref cannot be imported from JS");
+                            }
+                            Object webAssemblyValue;
+                            try {
+                                webAssemblyValue = ToWebAssemblyValueNodeGen.getUncached().execute(value, valueType);
+                            } catch (JSException ex) {
+                                if (ex.getErrorType() == JSErrorType.TypeError) {
+                                    throw Errors.createWasmLinkError(ex, null);
+                                } else {
+                                    throw ex;
+                                }
+                            }
+                            wasmValue = webAssemblyValue;
                         }
-                        wasmValue = webAssemblyValue;
-                    }
-                } else if (Strings.equals(Strings.MEMORY, externType)) {
-                    if (JSWebAssemblyMemory.isJSWebAssemblyMemory(value)) {
-                        wasmValue = ((JSWebAssemblyMemoryObject) value).getWASMMemory();
+                    } else if (Strings.equals(Strings.MEMORY, externType)) {
+                        if (JSWebAssemblyMemory.isJSWebAssemblyMemory(value)) {
+                            wasmValue = ((JSWebAssemblyMemoryObject) value).getWASMMemory();
+                        } else {
+                            throw createLinkErrorImport(i, module, name, "Imported value is not a WebAssembly.Memory object");
+                        }
+                    } else if (Strings.equals(Strings.TABLE, externType)) {
+                        if (JSWebAssemblyTable.isJSWebAssemblyTable(value)) {
+                            wasmValue = ((JSWebAssemblyTableObject) value).getWASMTable();
+                        } else {
+                            throw createLinkErrorImport(i, module, name, "Imported value is not a WebAssembly.Table object");
+                        }
+                    } else if (Strings.equals(Strings.TAG, externType)) {
+                        if (value instanceof JSWebAssemblyTagObject tag) {
+                            wasmValue = tag.getWasmTag();
+                        } else {
+                            throw createLinkErrorImport(i, module, name, "Imported value is not a WebAssembly.Tag object");
+                        }
                     } else {
-                        throw createLinkErrorImport(i, module, name, "Imported value is not a WebAssembly.Memory object");
+                        throw Errors.shouldNotReachHereUnexpectedValue(externType);
                     }
-                } else if (Strings.equals(Strings.TABLE, externType)) {
-                    if (JSWebAssemblyTable.isJSWebAssemblyTable(value)) {
-                        wasmValue = ((JSWebAssemblyTableObject) value).getWASMTable();
-                    } else {
-                        throw createLinkErrorImport(i, module, name, "Imported value is not a WebAssembly.Table object");
-                    }
-                } else if (Strings.equals(Strings.TAG, externType)) {
-                    if (value instanceof JSWebAssemblyTagObject tag) {
-                        wasmValue = tag.getWasmTag();
-                    } else {
-                        throw createLinkErrorImport(i, module, name, "Imported value is not a WebAssembly.Tag object");
-                    }
-                } else {
-                    throw Errors.shouldNotReachHereUnexpectedValue(externType);
+                }
+                else {
+                    var jsStringFn = realm.getWasmJsString();
+                    var jsString = InteropLibrary.getUncached(jsStringFn).execute(jsStringFn, wasmModule);
+                    Object instanceExport = realm.getWASMInstanceExport();
+                    Object wasmFn = InteropLibrary.getUncached(instanceExport).execute(instanceExport, jsString, Strings.toJavaString(name));
+                    TruffleString typeInfo = asTString(descriptorInterop.readMember(descriptor, "type"));
+                    wasmValue = JSWebAssemblyInstance.exportFunction(context, realm, wasmFn, typeInfo);
                 }
 
                 JSDynamicObject transformedModule;

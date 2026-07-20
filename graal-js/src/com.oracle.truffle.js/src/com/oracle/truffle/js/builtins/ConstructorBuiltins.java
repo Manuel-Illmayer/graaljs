@@ -3395,7 +3395,7 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
         }
 
         @Specialization
-        protected JSObject constructInstanceFromModule(JSDynamicObject newTarget, JSWebAssemblyModuleObject module, Object importObject) {
+        protected JSObject constructInstanceFromModule(JSDynamicObject newTarget, JSWebAssemblyModuleObject module, Object importObject, Object compileOptions) {
             if (importObject != Undefined.instance && !isObjectNode.executeBoolean(importObject)) {
                 throw Errors.createTypeError("WebAssembly.Instance(): Argument 1 must be an object", this);
             }
@@ -3404,7 +3404,7 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
             Object wasmModule = module.getWASMModule();
             JSRealm realm = getRealm();
             try {
-                Object wasmImportObject = JSWebAssemblyInstance.transformImportObject(getContext(), realm, wasmModule, importObject);
+                Object wasmImportObject = JSWebAssemblyInstance.transformImportObject(getContext(), realm, wasmModule, importObject, compileOptions);
                 Object instantiate = realm.getWASMModuleInstantiate();
                 try {
                     wasmInstance = instantiateModuleLib.execute(instantiate, wasmModule, wasmImportObject);
@@ -3422,7 +3422,7 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
 
         @SuppressWarnings("unused")
         @Specialization(guards = "!isJSWebAssemblyModule(other)")
-        protected JSObject constructInstanceFromOther(JSDynamicObject newTarget, Object other, Object importObject) {
+        protected JSObject constructInstanceFromOther(JSDynamicObject newTarget, Object other, Object importObject, Object compileOptions) {
             throw Errors.createTypeError("WebAssembly.Instance(): Argument 0 must be a WebAssembly.Module");
         }
 

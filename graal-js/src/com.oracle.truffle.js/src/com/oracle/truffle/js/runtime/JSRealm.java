@@ -503,6 +503,7 @@ public class JSRealm {
     private final Object wasmEmbedderDataGet;
     private final Object wasmEmbedderDataSet;
     private final Object wasmRefNull;
+    private final Object wasmJsString;
     // Exception handling proposal
     private final Object wasmTagAlloc;
     private final Object wasmTagType;
@@ -1010,6 +1011,7 @@ public class JSRealm {
                 wasmEmbedderDataSet = wasmInterop.readMember(wasmObject, "embedder_data_set");
                 wasmMemAsByteBuffer = wasmInterop.readMember(wasmObject, "mem_as_byte_buffer");
                 wasmRefNull = wasmInterop.readMember(wasmObject, "ref_null");
+                wasmJsString = wasmInterop.readMember(wasmObject, "js_string");
                 // Exception handling proposal
                 wasmTagAlloc = wasmInterop.readMember(wasmObject, "tag_alloc");
                 wasmTagType = wasmInterop.readMember(wasmObject, "tag_type");
@@ -1074,6 +1076,7 @@ public class JSRealm {
             this.wasmTagType = null;
             this.wasmExnAlloc = null;
             this.wasmExnTag = null;
+            this.wasmJsString = null;
 
             this.webAssemblyObject = null;
             this.webAssemblyGlobalConstructor = null;
@@ -3343,6 +3346,9 @@ public class JSRealm {
 
     public Object getWasmRefNull() {
         return wasmRefNull;
+    }
+    public Object getWasmJsString() {
+        return wasmJsString;
     }
 
     public Object getWASMTagAlloc() {

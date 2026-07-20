@@ -137,7 +137,7 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
             case compile:
                 return WebAssemblyCompileNodeGen.create(context, builtin, args().fixedArgs(1).createArgumentNodes(context));
             case instantiate:
-                return WebAssemblyInstantiateNodeGen.create(context, builtin, args().fixedArgs(2).createArgumentNodes(context));
+                return WebAssemblyInstantiateNodeGen.create(context, builtin, args().fixedArgs(3).createArgumentNodes(context));
             case validate:
                 return WebAssemblyValidateNodeGen.create(context, builtin, args().fixedArgs(1).createArgumentNodes(context));
             case JSTag:
@@ -241,8 +241,8 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
         }
 
         @Specialization
-        protected Object instantiate(Object byteSourceOrModule, Object importObject) {
-            JSPromiseObject promise = promisify(new Object[]{byteSourceOrModule, importObject});
+        protected Object instantiate(Object byteSourceOrModule, Object importObject, Object compileOptions) {
+            JSPromiseObject promise = promisify(new Object[]{byteSourceOrModule, importObject, compileOptions});
 
             if (byteSourceOrModule instanceof JSWebAssemblyModuleObject) {
                 return promise;
@@ -266,15 +266,19 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
             Object[] args = (Object[]) argument;
             Object byteSourceOrModule = args[0];
             Object importObject = args[1];
+            Object compileOptions = args[2];
 
             if (importObject != Undefined.instance && !isObjectNode.executeBoolean(importObject)) {
                 throw Errors.createTypeError("WebAssembly.instantiate(): Argument 1 must be an object", this);
+            }
+            if (compileOptions != Undefined.instance && !isObjectNode.executeBoolean(compileOptions)) {
+                throw Errors.createTypeError("WebAssembly.instantiate(): Argument 2 must be an object", this);
             }
 
             JSRealm realm = getRealm();
             if (byteSourceOrModule instanceof JSWebAssemblyModuleObject) {
                 Object wasmModule = ((JSWebAssemblyModuleObject) byteSourceOrModule).getWASMModule();
-                return instantiateModule(getContext(), realm, wasmModule, importObject, instantiateModuleLib);
+                return instantiateModule(getContext(), realm, wasmModule, importObject, compileOptions, instantiateModuleLib);
             }
 
             ByteSequence wasmByteSource = exportByteSourceNode.execute(byteSourceOrModule);
@@ -282,7 +286,7 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
                 try {
                     Source wasmSource = buildSource(wasmByteSource);
                     Object wasmModule = JSWebAssemblyModule.moduleDecode(realm, wasmSource);
-                    return new InstantiatedSourceInfo(wasmModule, importObject, wasmSource);
+                    return new InstantiatedSourceInfo(wasmModule, importObject, compileOptions, wasmSource);
                 } catch (AbstractTruffleException ex) {
                     errorBranch.enter();
                     ExceptionType type = InteropLibrary.getUncached(ex).getExceptionType(ex);
@@ -297,8 +301,8 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
             }
         }
 
-        public static JSWebAssemblyInstanceObject instantiateModule(JSContext context, JSRealm realm, Object wasmModule, Object importObject, InteropLibrary instantiateModuleLib) {
-            Object wasmImportObject = JSWebAssemblyInstance.transformImportObject(context, realm, wasmModule, importObject);
+        public static JSWebAssemblyInstanceObject instantiateModule(JSContext context, JSRealm realm, Object wasmModule, Object importObject, Object compileOptions, InteropLibrary instantiateModuleLib) {
+            Object wasmImportObject = JSWebAssemblyInstance.transformImportObject(context, realm, wasmModule, importObject, compileOptions);
             Object instantiate = realm.getWASMModuleInstantiate();
             Object wasmInstance;
             try {
@@ -321,7 +325,7 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
                 @Override
                 public Object execute(VirtualFrame frame) {
                     InstantiatedSourceInfo info = (InstantiatedSourceInfo) JSArguments.getUserArgument(frame.getArguments(), 0);
-                    Object jsInstance = instantiateModule(context, getRealm(), info.wasmModule(), info.importObject(), instantiateModuleLib);
+                    Object jsInstance = instantiateModule(context, getRealm(), info.wasmModule(), info.importObject(), info.compileOptions(), instantiateModuleLib);
                     return toJSInstantiatedSource(info.wasmModule(), jsInstance, info.wasmSource());
                 }
 
@@ -365,7 +369,7 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
 
     // Helper TruffleObject used to pass information through promise chain
     // during instantiation of a source.
-    record InstantiatedSourceInfo(Object wasmModule, Object importObject, Source wasmSource) implements TruffleObject {
+    record InstantiatedSourceInfo(Object wasmModule, Object importObject, Object compileOptions, Source wasmSource) implements TruffleObject {
     }
 
     public abstract static class WebAssemblyJSTagNode extends JSBuiltinNode {

@@ -193,6 +193,7 @@ public class WebAssemblyModuleRecord extends CyclicModuleRecord {
     @Override
     public Object executeModule(JSRealm realm, PromiseCapabilityRecord promiseCapability) {
         assert promiseCapability == null;
+        var compileOptions = JSOrdinary.createWithNullPrototype(context);
         var importObject = JSOrdinary.createWithNullPrototype(context);
         for (ModuleRequest requestedModule : getRequestedModules()) {
             JSRuntime.createDataProperty(importObject, requestedModule.specifier(), JSOrdinary.createWithNullPrototype(context));
@@ -217,7 +218,7 @@ public class WebAssemblyModuleRecord extends CyclicModuleRecord {
                 JSRuntime.createDataProperty(moduleImportsObject, name, value);
             }
 
-            var instance = WebAssemblyInstantiateNode.instantiateModule(context, realm, webAssemblyModule.getWASMModule(), importObject, InteropLibrary.getUncached());
+            var instance = WebAssemblyInstantiateNode.instantiateModule(context, realm, webAssemblyModule.getWASMModule(), importObject, compileOptions, InteropLibrary.getUncached());
             MaterializedFrame environment = getEnvironment();
             int i = 0;
             for (var name : getExportedNames()) {
