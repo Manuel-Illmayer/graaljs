@@ -8,9 +8,12 @@ const bytes = new Uint8Array(javaBytes);
 
 (async () => {
   try {
-    const wasm = await WebAssembly.instantiate(bytes,{},{builtins:["js-string"]});
+    const wasm = await WebAssembly.instantiate(bytes,{},{
+      builtins:["js-string"],
+      importedStringConstants: "string_constants"
+    });
 
-    const result = wasm.instance.exports._main("123");
+    const result = wasm.instance.exports._main();
     console.log("Result:", result);
     
   } catch (e) {

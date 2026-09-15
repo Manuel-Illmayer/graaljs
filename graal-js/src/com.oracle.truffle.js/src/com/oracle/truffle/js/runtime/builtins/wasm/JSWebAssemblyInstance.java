@@ -417,8 +417,13 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
     public static Object transformImportObject(JSContext context, JSRealm realm, Object wasmModule, Object importObject, Object compileOptions) {
         try {
             Set<String> enabledBuiltins = new HashSet<>();
+            TruffleString importedStringConstants = null;
             if (!JSRuntime.isNullOrUndefined(compileOptions)) {
                 Object builtins = JSRuntime.get(compileOptions, Strings.constant("builtins"));
+                Object importedStringConstantsObject = JSRuntime.get(compileOptions, Strings.constant("importedStringConstants"));
+                if (!JSRuntime.isNullOrUndefined(importedStringConstantsObject)) {
+                    importedStringConstants = Strings.constant(importedStringConstantsObject.toString());
+                }
                 if (builtins != null && JSRuntime.isArray(builtins)) {
                     InteropLibrary builtinsInterop = InteropLibrary.getUncached(builtins);
                     for (long j = 0; j < builtinsInterop.getArraySize(builtins); j++) {
@@ -446,8 +451,12 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
 
                 final boolean isBuiltin = enabledBuiltins.contains(module.toString());
                 final boolean isJsString = Strings.equals(module, Strings.constant("js-string"));
+                final boolean isImportedStringConstants = Strings.equals(module, importedStringConstants);
 
-                if (isBuiltin && isJsString) {
+                if (isImportedStringConstants) {
+                    wasmValue = name;
+                }
+                else if (isBuiltin && isJsString) {
                     var jsStringFn = realm.getWasmJsString();
                     var jsString = InteropLibrary.getUncached(jsStringFn).execute(jsStringFn, wasmModule);
                     Object instanceExport = realm.getWASMInstanceExport();
