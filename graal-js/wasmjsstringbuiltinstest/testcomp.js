@@ -11,9 +11,8 @@ const bytes = new Uint8Array(javaBytes);
     const wasmModule = await WebAssembly.compile(bytes, { builtins: ["js-string"] });
     console.log("Compilation successful.");
 
-    const resultObj = await WebAssembly.instantiate(wasmModule, {});
+    const instance = await WebAssembly.instantiate(wasmModule, {});
 
-    const instance = resultObj.instance;
     const result = instance.exports._main("123");
     console.log("Result:", result);
     
