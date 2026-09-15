@@ -50,11 +50,13 @@ public final class JSWebAssemblyModuleObject extends JSNonProxyObject {
     // [[Module]] internal slot
     private final Object wasmModule;
     private final Source wasmSource;
+    private final Object compileOptions;
 
-    protected JSWebAssemblyModuleObject(Shape shape, JSDynamicObject proto, Object wasmModule, Source wasmSource) {
+    protected JSWebAssemblyModuleObject(Shape shape, JSDynamicObject proto, Object wasmModule, Source wasmSource, Object compileOptions) {
         super(shape, proto);
         this.wasmModule = wasmModule;
         this.wasmSource = wasmSource;
+        this.compileOptions = compileOptions;
     }
 
     public Object getWASMModule() {
@@ -63,6 +65,10 @@ public final class JSWebAssemblyModuleObject extends JSNonProxyObject {
 
     public Source getWASMSource() {
         return wasmSource;
+    }
+
+    public Object getCompileOptions() {
+        return compileOptions;
     }
 
     @Override

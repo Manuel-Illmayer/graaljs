@@ -360,6 +360,7 @@ public class SerializedData {
     private void serializeWebAssemblyModule(JSWebAssemblyModuleObject moduleObject) {
         data.add(Type.WebAssemblyModule);
         data.add(moduleObject.getWASMSource());
+        data.add(moduleObject.getCompileOptions());
     }
 
     private void serializeProperties(JSObject object) {
@@ -534,8 +535,9 @@ public class SerializedData {
 
     private static Object deserializeWebAssemblyModule(JSRealm realm, Iterator<Object> iter) {
         Source wasmSource = (Source) iter.next();
+        Object compileOptions = iter.next();
         Object wasmModule = JSWebAssemblyModule.moduleDecode(realm, wasmSource);
-        return JSWebAssemblyModule.create(realm.getContext(), realm, wasmModule, wasmSource);
+        return JSWebAssemblyModule.create(realm.getContext(), realm, wasmModule, wasmSource, compileOptions);
     }
 
     private enum Type {

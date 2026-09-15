@@ -135,7 +135,7 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
     protected Object createNode(JSContext context, JSBuiltin builtin, boolean construct, boolean newTarget, WebAssembly builtinEnum) {
         switch (builtinEnum) {
             case compile:
-                return WebAssemblyCompileNodeGen.create(context, builtin, args().fixedArgs(1).createArgumentNodes(context));
+                return WebAssemblyCompileNodeGen.create(context, builtin, args().fixedArgs(2).createArgumentNodes(context));
             case instantiate:
                 return WebAssemblyInstantiateNodeGen.create(context, builtin, args().fixedArgs(3).createArgumentNodes(context));
             case validate:
@@ -201,24 +201,31 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
     public abstract static class WebAssemblyCompileNode extends PromisifiedBuiltinNode {
 
         @Child ExportByteSourceNode exportByteSourceNode;
+        @Child IsObjectNode isObjectNode;
 
         public WebAssemblyCompileNode(JSContext context, JSBuiltin builtin) {
             super(context, builtin);
             this.exportByteSourceNode = ExportByteSourceNode.create(context, "WebAssembly.compile(): Argument 0 must be a buffer source", "WebAssembly.compile(): BufferSource argument is empty");
+            this.isObjectNode = IsObjectNode.create();
         }
 
         @Specialization
-        protected Object compile(Object byteSource) {
-            return promisify(byteSource);
+        protected Object compile(Object byteSource, Object compileOptions) {
+            return promisify(new Object[]{byteSource, compileOptions});
         }
 
         @Override
         protected Object process(Object argument) {
-            ByteSequence byteSource = exportByteSourceNode.execute(argument);
+            Object[] args = (Object[]) argument;
+            ByteSequence byteSource = exportByteSourceNode.execute(args[0]);
+            Object compileOptions = args[1];
+            if (compileOptions != Undefined.instance && !isObjectNode.executeBoolean(compileOptions)) {
+                throw Errors.createTypeError("WebAssembly.compile(): Argument 1 must be an object", this);
+            }
             JSRealm realm = getRealm();
             Source wasmSource = buildSource(byteSource);
             Object wasmModule = JSWebAssemblyModule.moduleDecode(realm, wasmSource);
-            return JSWebAssemblyModule.create(getContext(), realm, wasmModule, wasmSource);
+            return JSWebAssemblyModule.create(getContext(), realm, wasmModule, wasmSource, compileOptions);
         }
 
     }
@@ -276,8 +283,11 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
             }
 
             JSRealm realm = getRealm();
-            if (byteSourceOrModule instanceof JSWebAssemblyModuleObject) {
-                Object wasmModule = ((JSWebAssemblyModuleObject) byteSourceOrModule).getWASMModule();
+            if (byteSourceOrModule instanceof JSWebAssemblyModuleObject moduleObject) {
+                Object wasmModule = moduleObject.getWASMModule();
+                if (compileOptions == Undefined.instance) {
+                    compileOptions = moduleObject.getCompileOptions();
+                }
                 return instantiateModule(getContext(), realm, wasmModule, importObject, compileOptions, instantiateModuleLib);
             }
 
@@ -332,7 +342,7 @@ public class WebAssemblyBuiltins extends JSBuiltinsContainer.SwitchEnum<WebAssem
                 Object toJSInstantiatedSource(Object wasmModule, Object jsInstance, Source wasmSource) {
                     JSRealm realm = getRealm();
                     JSObject instantiatedSource = JSOrdinary.create(context, realm);
-                    JSObject.set(instantiatedSource, Strings.MODULE, JSWebAssemblyModule.create(context, realm, wasmModule, wasmSource));
+                    JSObject.set(instantiatedSource, Strings.MODULE, JSWebAssemblyModule.create(context, realm, wasmModule, wasmSource, Undefined.instance));
                     JSObject.set(instantiatedSource, Strings.INSTANCE, jsInstance);
                     return instantiatedSource;
                 }

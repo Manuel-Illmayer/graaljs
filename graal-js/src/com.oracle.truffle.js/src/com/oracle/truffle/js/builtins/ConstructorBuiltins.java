@@ -3374,7 +3374,7 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
                 throw tex;
             }
             JSDynamicObject proto = getPrototype(realm, newTarget);
-            return JSWebAssemblyModule.create(getContext(), realm, proto, wasmModule, wasmSource);
+            return JSWebAssemblyModule.create(getContext(), realm, proto, wasmModule, wasmSource, Undefined.instance);
         }
 
         @Override
