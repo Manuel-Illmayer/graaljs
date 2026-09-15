@@ -451,7 +451,7 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
 
                 final boolean isBuiltin = enabledBuiltins.contains(module.toString());
                 final boolean isJsString = Strings.equals(module, Strings.constant("js-string"));
-                final boolean isImportedStringConstants = Strings.equals(module, importedStringConstants);
+                final boolean isImportedStringConstants = importedStringConstants != null && Strings.equals(module, importedStringConstants);
 
                 if (isImportedStringConstants) {
                     wasmValue = name;
