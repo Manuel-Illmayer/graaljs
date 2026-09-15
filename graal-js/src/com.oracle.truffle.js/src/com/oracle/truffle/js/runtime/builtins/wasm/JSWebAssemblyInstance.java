@@ -41,7 +41,9 @@
 package com.oracle.truffle.js.runtime.builtins.wasm;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.api.CallTarget;
@@ -414,6 +416,17 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
     @CompilerDirectives.TruffleBoundary
     public static Object transformImportObject(JSContext context, JSRealm realm, Object wasmModule, Object importObject, Object compileOptions) {
         try {
+            Set<String> enabledBuiltins = new HashSet<>();
+            if (!JSRuntime.isNullOrUndefined(compileOptions)) {
+                Object builtins = JSRuntime.get(compileOptions, Strings.constant("builtins"));
+                if (builtins != null && JSRuntime.isArray(builtins)) {
+                    InteropLibrary builtinsInterop = InteropLibrary.getUncached(builtins);
+                    for (long j = 0; j < builtinsInterop.getArraySize(builtins); j++) {
+                        enabledBuiltins.add(builtinsInterop.readArrayElement(builtins, j).toString());
+                    }
+                }
+            }
+
             JSObject transformedImportObject = JSOrdinary.createWithNullPrototype(context);
             Object importsFn = realm.getWASMModuleImports();
             Object imports = InteropLibrary.getUncached(importsFn).execute(importsFn, wasmModule);
@@ -431,9 +444,18 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
                 TruffleString externType = asTString(descriptorInterop.readMember(descriptor, "kind"));
                 Object wasmValue;
 
+                final boolean isBuiltin = enabledBuiltins.contains(module.toString());
                 final boolean isJsString = Strings.equals(module, Strings.constant("js-string"));
 
-                if (!isJsString) {
+                if (isBuiltin && isJsString) {
+                    var jsStringFn = realm.getWasmJsString();
+                    var jsString = InteropLibrary.getUncached(jsStringFn).execute(jsStringFn, wasmModule);
+                    Object instanceExport = realm.getWASMInstanceExport();
+                    Object wasmFn = InteropLibrary.getUncached(instanceExport).execute(instanceExport, jsString, Strings.toJavaString(name));
+                    TruffleString typeInfo = asTString(descriptorInterop.readMember(descriptor, "type"));
+                    wasmValue = JSWebAssemblyInstance.exportFunction(context, realm, wasmFn, typeInfo);
+                }
+                else {
                     Object value = JSRuntime.get(moduleImportObject, name);
                     if (!moduleImportObjectInterop.hasMembers(moduleImportObject)) {
                         throw Errors.createTypeError("Imported module \"" + module + "\" is not an object: " + JSRuntime.safeToString(moduleImportObject));
@@ -502,14 +524,6 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
                     } else {
                         throw Errors.shouldNotReachHereUnexpectedValue(externType);
                     }
-                }
-                else {
-                    var jsStringFn = realm.getWasmJsString();
-                    var jsString = InteropLibrary.getUncached(jsStringFn).execute(jsStringFn, wasmModule);
-                    Object instanceExport = realm.getWASMInstanceExport();
-                    Object wasmFn = InteropLibrary.getUncached(instanceExport).execute(instanceExport, jsString, Strings.toJavaString(name));
-                    TruffleString typeInfo = asTString(descriptorInterop.readMember(descriptor, "type"));
-                    wasmValue = JSWebAssemblyInstance.exportFunction(context, realm, wasmFn, typeInfo);
                 }
 
                 JSDynamicObject transformedModule;
